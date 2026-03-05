@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:studio": "vite --mode studio",
     "build": "vite build",
+    "build:studio": "vite build --mode studio",
     "build:dev": "vite build --mode development",
     "import:curriculum": "node scripts/import-curriculum-pdfs.mjs",
     "lint": "eslint .",
