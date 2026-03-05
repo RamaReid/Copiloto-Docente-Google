@@ -272,7 +272,7 @@ async function callAI(
   if (tools) body.tools = tools;
   if (toolChoice) body.tool_choice = toolChoice;
 
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -283,7 +283,7 @@ async function callAI(
 
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`AI gateway error ${resp.status}: ${text}`);
+    throw new Error(`Google AI Studio error ${resp.status}: ${text}`);
   }
 
   return await resp.json();
@@ -312,7 +312,13 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+  const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!geminiApiKey) {
+    return new Response(JSON.stringify({ error: "Falta GEMINI_API_KEY en el entorno" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   // Auth check
   const authHeader = req.headers.get("Authorization");
@@ -728,8 +734,8 @@ REGLAS:
         ];
 
         const teachingResult = await callAI(
-          lovableApiKey,
-          "google/gemini-2.5-flash",
+          geminiApiKey,
+          "gemini-2.5-flash",
           [
             { role: "system", content: teachingSystemPrompt },
             { role: "user", content: "Generá el material didáctico completo." },
@@ -873,8 +879,8 @@ REGLAS OBLIGATORIAS:
               : "";
 
           const readingResult = await callAI(
-            lovableApiKey,
-            "google/gemini-2.5-pro",
+            geminiApiKey,
+            "gemini-2.5-pro",
             [
               { role: "system", content: readingSystemPrompt },
               {

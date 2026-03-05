@@ -262,14 +262,14 @@ const GOLDEN_FYHCT_6_EESA_LESSONS: CanonLessonSeed[] = [
 ];
 
 async function callAI(apiKey: string, messages: Array<{ role: string; content: string }>) {
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-pro",
+      model: Deno.env.get("GEMINI_PLAN_MODEL") || "gemini-2.5-pro",
       messages,
       response_format: { type: "json_object" },
     }),
@@ -277,7 +277,7 @@ async function callAI(apiKey: string, messages: Array<{ role: string; content: s
 
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`AI gateway error ${resp.status}: ${text}`);
+    throw new Error(`Google AI Studio error ${resp.status}: ${text}`);
   }
 
   return await resp.json();
@@ -539,7 +539,13 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+  const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!geminiApiKey) {
+    return new Response(JSON.stringify({ error: "Falta GEMINI_API_KEY en el entorno" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -714,7 +720,7 @@ ${nodeNames.join("\n")}`;
 
     let aiPayload: Partial<BootstrapPayload> | null = null;
     try {
-      const aiResponse = await callAI(lovableApiKey, [{ role: "user", content: prompt }]);
+      const aiResponse = await callAI(geminiApiKey, [{ role: "user", content: prompt }]);
       aiPayload = JSON.parse(aiResponse.choices[0].message.content || "{}");
     } catch {
       aiPayload = null;
