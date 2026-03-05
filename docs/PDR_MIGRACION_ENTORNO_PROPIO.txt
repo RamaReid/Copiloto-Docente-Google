@@ -1,0 +1,39 @@
+PDR - Migracion y Ejecucion en Entorno Propio
+
+Proyecto:
+Copiloto Docente es una aplicacion web para planificacion docente y generacion de materiales didacticos asistidos por IA. Incluye flujos de autenticacion, gestion de cursos/planes/clases y generacion automatica de contenido pedagogico.
+
+Repositorio oficial:
+https://github.com/RamaReid/Copiloto-Docente-Google.git
+
+Objetivo de este PDR:
+Levantar y continuar el proyecto en un entorno propio, desacoplado de integraciones previas.
+
+Alcance funcional esperado:
+1) Gestion de usuarios y acceso.
+2) Gestion de cursos y planificacion anual.
+3) Generacion de materiales con IA.
+4) Continuidad de edicion y despliegue desde el entorno del equipo receptor.
+
+Instruccion obligatoria de sincronizacion:
+Siempre iniciar con pull del repositorio oficial.
+
+Comandos base:
+git clone https://github.com/RamaReid/Copiloto-Docente-Google.git
+cd Copiloto-Docente-Google
+git pull --rebase origin main
+
+Lineamientos de implementacion para el nuevo entorno:
+1) Omitir toda integracion relacionada con Supabase.
+2) Omitir toda integracion relacionada con Lovable.
+3) No depender de infraestructura externa heredada del repo anterior.
+4) Generar y configurar los servicios equivalentes dentro de su propio entorno.
+5) Reemplazar autenticacion, base de datos, storage y funciones backend por su stack objetivo local/propio.
+
+Notas de migracion:
+- Este repositorio es la base de codigo de referencia.
+- La ejecucion final debe quedar funcional en infraestructura propia del equipo receptor.
+- Cualquier referencia remanente a Supabase o Lovable debe considerarse fuera de alcance y reemplazable.
+
+Entregable esperado:
+Version operativa del proyecto en entorno propio, sincronizada desde GitHub y sin dependencias activas de Supabase/Lovable.
