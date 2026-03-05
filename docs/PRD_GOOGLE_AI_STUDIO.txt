@@ -1,0 +1,57 @@
+PRD - Implementacion en Google AI Studio (Entorno Propio)
+Fecha: 2026-03-05
+
+1) Contexto
+Este proyecto (Copiloto Docente) permite gestionar cursos, planificacion anual y materiales didacticos con soporte de IA.
+Para desarrollo en Google AI Studio, el proyecto ya incluye un modo "studio" que funciona con proveedores mock, sin depender de Supabase/Lovable en tiempo de desarrollo.
+
+2) Objetivo
+Levantar y continuar el proyecto en entorno propio de Google AI Studio, manteniendo el flujo funcional de UI y negocio, evitando bloqueos por credenciales externas.
+
+3) Requisito obligatorio de integracion con GitHub
+El equipo receptor DEBE conectarse al repositorio oficial en GitHub y sincronizar cambios desde alli.
+
+URL oficial del repositorio:
+https://github.com/RamaReid/Copiloto-Docente-Google.git
+
+Comandos obligatorios de inicio:
+git clone https://github.com/RamaReid/Copiloto-Docente-Google.git
+cd Copiloto-Docente-Google
+git pull --rebase origin main
+npm install
+npm run dev:studio
+
+4) Alcance
+- Usar el codigo actual como base oficial.
+- Trabajar en modo studio (mock) para frontend y flujo funcional.
+- Validar navegacion, autenticacion mock, gestion de cursos y generacion simulada de materiales.
+- Preparar terreno para migracion posterior de datos/autenticacion a Firebase.
+
+5) Fuera de alcance en esta fase
+- No activar ni depender de Supabase.
+- No activar ni depender de Lovable.
+- No exigir infraestructura de backend productiva para desarrollo inicial.
+
+6) Requisitos funcionales
+- RF1: El sistema debe iniciar en modo studio con `npm run dev:studio`.
+- RF2: Debe permitir login y registro mock.
+- RF3: Debe permitir crear/editar cursos y planificaciones en modo mock.
+- RF4: Debe permitir ejecutar funciones simuladas de IA (sin llamadas productivas externas).
+- RF5: Debe persistir estado local de pruebas (localStorage) para iteracion rapida.
+
+7) Requisitos tecnicos
+- Runtime configurable por variables:
+  - `VITE_APP_MODE=studio|production`
+  - `VITE_DATA_PROVIDER=mock|supabase|firebase`
+  - `VITE_AI_PROVIDER=mock|google`
+  - `VITE_STUDIO_AUTO_LOGIN=true|false`
+- El modo `studio` debe operar con `mock` por defecto.
+
+8) Criterios de aceptacion
+- CA1: Proyecto clonado y sincronizado desde GitHub (URL oficial).
+- CA2: `npm run dev:studio` levanta sin dependencia de Supabase/Lovable.
+- CA3: `npm run build:studio` finaliza exitosamente.
+- CA4: Flujo minimo validado: login -> dashboard -> crear curso -> generar material mock.
+
+9) Entregable esperado
+Version funcional en entorno propio de Google AI Studio, conectada a GitHub y operativa en modo studio, sin dependencias activas de Supabase/Lovable para desarrollo.
