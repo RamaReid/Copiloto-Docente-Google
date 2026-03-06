@@ -1,0 +1,40 @@
+You are working on this repository:
+https://github.com/RamaReid/Copiloto-Docente-Google.git
+Branch: main
+Baseline commit: 6c8622acbd791e165bd2282eb017a3d10bfd1116
+
+Task:
+Port missing features from the migration bundle in /migracion while keeping full compatibility with Studio mode (mock providers).
+
+Read first, in this order:
+1) migracion/GOOGLE_STUDIO_HANDOFF.txt
+2) migracion/MIGRATION_SUMMARY.md
+3) migracion/MISSING_FEATURES.csv
+4) migracion/PATCH_PLAN.md
+5) migracion/migration_patches/phase1.patch
+6) migracion/migration_patches/phase2.patch
+7) migracion/migration_patches/phase3.patch
+
+Hard constraints:
+- Do NOT reintroduce legacy provider SDK dependencies.
+- Do NOT require external backend credentials for studio mode.
+- Keep `npm run dev:studio` functional.
+- Keep current runtime selector behavior from src/config/runtime.ts and src/integrations/supabase/mockClient.ts.
+- Ignore legacy provider names if they appear in historical docs/patch text unless explicitly required by a migration step.
+
+Patch policy:
+- Apply phase1 directly if clean.
+- For phase2 and phase3, do NOT force git apply if it fails.
+- Manually port changes file-by-file, preserving encoding and current code style.
+- Avoid introducing mojibake text artifacts.
+
+Expected output format:
+1) MIGRATION_EXECUTION_PLAN.md
+2) A list of exact files changed with purpose.
+3) Unified diff patches generated against current HEAD, phase by phase.
+4) Verification report with:
+   - npm run build
+   - npm run build:studio
+   - brief smoke test results
+
+If any source instruction conflicts with the current codebase, prefer current runtime architecture and document the deviation explicitly.

@@ -1,0 +1,37 @@
+TRANSFER CHECKLIST FOR GOOGLE AI STUDIO
+
+1) Sync repository
+git clone https://github.com/RamaReid/Copiloto-Docente-Google.git
+cd Copiloto-Docente-Google
+git pull --rebase origin main
+
+2) Install and baseline validation
+npm install
+npm run build
+npm run build:studio
+
+3) Studio runtime validation
+npm run dev:studio
+
+4) Provide migration context to Google AI Studio
+Upload or paste:
+- migracion/GOOGLE_STUDIO_HANDOFF.txt
+- migracion/GOOGLE_STUDIO_PROMPT.txt
+- migracion/MIGRATION_SUMMARY.md
+- migracion/MISSING_FEATURES.csv
+- migracion/PATCH_PLAN.md
+- migracion/migration_patches/phase1.patch
+- migracion/migration_patches/phase2.patch
+- migracion/migration_patches/phase3.patch
+
+5) Execution expectation
+- Phase 1 can be applied directly.
+- Phase 2 and Phase 3 must be ported manually.
+- Keep studio mode working at all times.
+- Ignore legacy provider mentions in migration text unless explicitly needed for manual porting.
+
+6) Final acceptance gate
+- Build production passes.
+- Build studio passes.
+- Studio smoke flow passes:
+  login -> dashboard -> create course -> lesson -> generate materials.

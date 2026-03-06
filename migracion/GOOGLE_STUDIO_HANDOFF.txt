@@ -1,0 +1,64 @@
+GOOGLE AI STUDIO HANDOFF
+Date: 2026-03-05
+
+1) Official repository
+URL: https://github.com/RamaReid/Copiloto-Docente-Google.git
+Branch: main
+Reference commit: 6c8622acbd791e165bd2282eb017a3d10bfd1116
+
+2) Current execution model
+- Development target is Google AI Studio, not Lovable.
+- Studio mode must run without external backend dependencies.
+- Runtime already supports:
+  - VITE_APP_MODE=studio
+  - VITE_DATA_PROVIDER=mock
+  - VITE_AI_PROVIDER=mock
+  - VITE_STUDIO_AUTO_LOGIN=true
+
+3) What is already prepared in base repo
+- Mock runtime and mock data client for local flow.
+- Auth/data/functions simulation through localStorage.
+- Script: npm run dev:studio
+- Script: npm run build:studio
+- PRD for Studio: docs/PRD_GOOGLE_AI_STUDIO.txt
+
+4) Migration package included in this folder
+- MIGRATION_SUMMARY.md
+- MISSING_FEATURES.csv
+- PATCH_PLAN.md
+- migration_patches/phase1.patch
+- migration_patches/phase2.patch
+- migration_patches/phase3.patch
+
+5) Critical note about patch applicability
+- phase1.patch: applies cleanly on current base.
+- phase2.patch and phase3.patch: do NOT apply directly on current base.
+- Reason: context drift and encoding artifacts in patch payload.
+- Expected approach: controlled manual port per file, not blind git apply.
+
+6) Required constraints for Studio work
+- Do not reintroduce legacy provider SDKs.
+- Do not require external backend credentials for Studio validation.
+- Keep all new features compatible with studio/mock runtime.
+- Preserve existing routes and core UX flow.
+
+6.1) Legacy terms handling (important)
+- Source files may contain historical mentions of old providers.
+- Treat those mentions as legacy context only.
+- Do not infer required dependencies from those legacy strings.
+
+7) Priority implementation order
+1. Apply phase1 (UI feedback layer).
+2. Port phase2 manually (course wizard, plan editor, lesson bibliography, lesson UX).
+3. Port phase3 manually (curriculum parsing, bootstrap quality, generation validation, schema/types).
+
+8) Verification minimum
+1. npm run build
+2. npm run build:studio
+3. npm run dev:studio
+4. Functional smoke test:
+   - login
+   - dashboard
+   - create course
+   - open lesson
+   - generate mock materials

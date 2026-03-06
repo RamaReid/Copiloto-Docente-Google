@@ -1,0 +1,10 @@
+﻿id,priority,flow,feature,missing_in_base,files_to_port,impact
+F001,P1,curso,"Wizard con modalidad de curso (NINGUNA/ORIENTACION/TECNICATURA) + canonizacion de especialidad",yes,"src/pages/CourseNew.tsx","Mejora precision de resolucion curricular y reduce errores de configuracion"
+F002,P1,plan,"Plan editor con tabs Contenidos/Bibliografia y editor expandido",yes,"src/components/plan/PlanEditor.tsx","Aumenta trazabilidad curricular y velocidad de edicion docente"
+F003,P1,leccion,"Selector de bibliografia por leccion con limpieza y deduplicacion",yes,"src/components/lesson/BibliographySelector.tsx","Reduce ruido de fuentes y mejora calidad de briefs"
+F004,P1,leccion,"UX de generacion (ThinkingBook, parseo de errores, fallback descarga PDF)",yes,"src/components/ui/ThinkingBook.tsx|src/index.css|src/components/lesson/GenerateButton.tsx|src/components/lesson/CopilotPanel.tsx|src/pages/Lesson.tsx|src/components/lesson/ReadingMaterialView.tsx","Mejora feedback y recuperacion ante fallos operativos"
+F005,P2,busqueda,"Parser curricular con extraccion bibliografica robusta",yes,"supabase/functions/_shared/curriculumImport.ts","Mejora la base de nodos y evita autoridades/artefactos como contenido"
+F006,P2,plan,"Bootstrap con pools de nodos core/bibliografia y linkage estable",yes,"supabase/functions/bootstrap-course-plan/index.ts","Incrementa coherencia entre plan anual, mapeos y clases"
+F007,P2,generacion,"Validacion fuerte de lectura (trazabilidad de fuentes + reglas HTML/palabras)",yes,"supabase/functions/generate-materials/index.ts","Aumenta calidad y auditabilidad de material de lectura"
+F008,P2,datos,"Ajuste idempotente de courses.curriculum_document_id + tipos TS",yes,"supabase/migrations/20260305113000_fix_courses_curriculum_link.sql|src/integrations/supabase/types.ts","Evita fallos por desalineacion de esquema entre entornos"
+F009,P3,arquitectura,"Bundle aplicable por fases sobre base main sin introducir Lovable",yes,"migration_patches/phase1.patch|migration_patches/phase2.patch|migration_patches/phase3.patch","Permite migracion incremental y reversible"

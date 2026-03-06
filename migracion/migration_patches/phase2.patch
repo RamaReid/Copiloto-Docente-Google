@@ -1,0 +1,1477 @@
+﻿
+diff --git a/src/pages/CourseNew.tsx b/src/pages/CourseNew.tsx
+index 31c97b9..aef927c 100644
+--- a/src/pages/CourseNew.tsx
++++ b/src/pages/CourseNew.tsx
+@@ -1,4 +1,4 @@
+-import { useEffect, useMemo, useState } from "react";
++﻿import { useEffect, useMemo, useState } from "react";
+ import { Link, useNavigate, useSearchParams } from "react-router-dom";
+ import { ArrowLeft, ArrowRight, Check, ExternalLink, Loader2, Upload } from "lucide-react";
+ 
+@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
+ type SchoolType = "COMUN" | "TECNICA";
+ type Cycle = "BASIC" | "UPPER";
+ type ResolutionStatus = "idle" | "resolving" | "resolved" | "ambiguous" | "not_found" | "error";
++type CourseContextMode = "NINGUNA" | "ORIENTACION" | "TECNICATURA";
+ 
+ interface SchoolOption {
+   id: string;
+@@ -47,14 +48,52 @@ interface SupportedProgram {
+   speciality: string | null;
+ }
+ 
++const ORIENTATION_SUGGESTIONS = [
++  "Ciencias Sociales",
++  "Ciencias Naturales",
++  "EconomÃ­a y AdministraciÃ³n",
++  "Arte",
++  "ComunicaciÃ³n",
++  "EducaciÃ³n FÃ­sica",
++  "Lenguas Extranjeras",
++];
++
++const TECH_SPECIALITY_SUGGESTIONS = [
++  "TÃ©cnico en AeronÃ¡utica",
++  "TÃ©cnico en Automotores",
++  "TÃ©cnico en AviÃ³nica",
++  "TÃ©cnico en ComputaciÃ³n",
++  "TÃ©cnico en ElectromecÃ¡nica",
++  "TÃ©cnico en ElectrÃ³nica",
++  "TÃ©cnico en Maestro Mayor de Obras",
++  "TÃ©cnico en Multimedios",
++  "TÃ©cnico en Naval",
++  "TÃ©cnico en QuÃ­mica",
++  "TÃ©cnico en Servicios TurÃ­sticos",
++  "TÃ©cnico en InformÃ¡tica Personal y Profesional",
++  "TÃ©cnico en AdministraciÃ³n de las Organizaciones",
++  "TÃ©cnico en ProducciÃ³n Agropecuaria con OrientaciÃ³n en Agroalimentos",
++  "InformÃ¡tica",
++  "ProgramaciÃ³n",
++  "Alimentos",
++  "AdministraciÃ³n agropecuaria",
++];
++
++const SPECIALITY_ALIAS_TO_CANON: Record<string, string> = {
++  informatica: "TÃ©cnico en InformÃ¡tica Personal y Profesional",
++  programacion: "TÃ©cnico en InformÃ¡tica Personal y Profesional",
++  alimentos: "TÃ©cnico en ProducciÃ³n Agropecuaria con OrientaciÃ³n en Agroalimentos",
++  "administracion agropecuaria": "TÃ©cnico en ProducciÃ³n Agropecuaria con OrientaciÃ³n en Agroalimentos",
++};
++
+ function candidateScopeLabel(candidate: Pick<CurriculumCandidate, "school_type" | "orientation" | "speciality">): string {
+   const parts = [
+-    candidate.school_type || "Generico",
++    candidate.school_type || "GenÃ©rico",
+     candidate.orientation || null,
+     candidate.speciality || null,
+   ].filter(Boolean);
+ 
+-  return parts.join(" · ");
++  return parts.join(" | ");
+ }
+ 
+ function normalize(value: string | null | undefined): string {
+@@ -81,6 +120,13 @@ function isMissingCurriculumColumnError(error: { message?: string } | null | und
+   return message.includes("curriculum_document_id") && message.includes("courses");
+ }
+ 
++function canonicalizeSpeciality(value: string): string {
++  const trimmed = value.trim();
++  if (!trimmed) return "";
++  const normalized = normalize(trimmed);
++  return SPECIALITY_ALIAS_TO_CANON[normalized] || trimmed;
++}
++
+ function scoreCandidate(
+   candidate: CurriculumCandidate,
+   schoolType: SchoolType,
+@@ -114,6 +160,7 @@ interface WizardState {
+   cycle: Cycle | "";
+   yearLevel: number | null;
+   subject: string;
++  contextMode: CourseContextMode;
+   orientation: string;
+   speciality: string;
+   newSchoolName: string;
+@@ -123,6 +170,12 @@ interface WizardState {
+   creatingNewSchool: boolean;
+ }
+ 
++function contextModeLabel(value: CourseContextMode): string {
++  if (value === "ORIENTACION") return "OrientaciÃ³n";
++  if (value === "TECNICATURA") return "Tecnicatura";
++  return "Ninguna / Normal";
++}
++
+ export default function CourseNew() {
+   const navigate = useNavigate();
+   const [searchParams] = useSearchParams();
+@@ -151,6 +204,11 @@ export default function CourseNew() {
+     cycle: initialCycle,
+     yearLevel: initialYearLevel,
+     subject: searchParams.get("subject") || "",
++    contextMode: searchParams.get("speciality")
++      ? "TECNICATURA"
++      : searchParams.get("orientation")
++      ? "ORIENTACION"
++      : "NINGUNA",
+     orientation: searchParams.get("orientation") || "",
+     speciality: searchParams.get("speciality") || "",
+     newSchoolName: "",
+@@ -184,31 +242,31 @@ export default function CourseNew() {
+         program.year_level === state.yearLevel
+     );
+   }, [state.cycle, state.subject, state.yearLevel, supportedPrograms]);
++  const manualOrientation = state.contextMode === "ORIENTACION";
++  const manualSpeciality = state.contextMode === "TECNICATURA";
+   const needsOrientation = useMemo(() => {
++    if (manualOrientation) return state.cycle === "UPPER";
+     if (!(state.cycle === "UPPER" && state.schoolType === "COMUN")) return false;
+     return matchingPrograms.some((program) => !!program.orientation);
+-  }, [matchingPrograms, state.cycle, state.schoolType]);
++  }, [manualOrientation, matchingPrograms, state.cycle, state.schoolType]);
+   const needsSpeciality = useMemo(() => {
++    if (manualSpeciality) return state.cycle === "UPPER";
+     if (!(state.cycle === "UPPER" && state.schoolType === "TECNICA")) return false;
+     return matchingPrograms.some((program) => !!program.speciality);
+-  }, [matchingPrograms, state.cycle, state.schoolType]);
++  }, [manualSpeciality, matchingPrograms, state.cycle, state.schoolType]);
+ 
+-  const steps = useMemo(() => {
+-    const base = [
++  const steps = useMemo(
++    () => [
+       { num: 1, label: "Provincia" },
+       { num: 2, label: "Materia" },
+       { num: 3, label: "Escuela" },
+       { num: 4, label: "Ciclo" },
+-      { num: 5, label: "Ano" },
+-    ];
+-
+-    if (needsOrientation) base.push({ num: 6, label: "Orientacion" });
+-    if (needsSpeciality) base.push({ num: 7, label: "Especialidad" });
+-
+-    base.push({ num: 8, label: "Programa oficial" });
+-    base.push({ num: 9, label: "Confirmacion" });
+-    return base;
+-  }, [needsOrientation, needsSpeciality]);
++      { num: 5, label: "AÃ±o" },
++      { num: 6, label: "Programa oficial" },
++      { num: 7, label: "ConfirmaciÃ³n" },
++    ],
++    []
++  );
+ 
+   useEffect(() => {
+     supabase
+@@ -238,7 +296,7 @@ export default function CourseNew() {
+     setResolutionError("");
+     setCurriculumCandidates([]);
+     setSelectedCurriculumId("");
+-  }, [state.subject, state.cycle, state.yearLevel, state.schoolType, state.orientation, state.speciality]);
++  }, [state.subject, state.cycle, state.yearLevel, state.schoolType, state.contextMode, state.orientation, state.speciality]);
+ 
+   useEffect(() => {
+     if (!initialCurriculumId) return;
+@@ -299,7 +357,7 @@ export default function CourseNew() {
+             year_level: state.yearLevel,
+             school_type: state.schoolType,
+             orientation: needsOrientation ? state.orientation : null,
+-            speciality: needsSpeciality ? state.speciality : null,
++            speciality: needsSpeciality ? canonicalizeSpeciality(state.speciality) : null,
+           },
+         });
+ 
+@@ -336,7 +394,7 @@ export default function CourseNew() {
+         setCurriculumCandidates([]);
+         setSelectedCurriculumId("");
+         setResolutionStatus("not_found");
+-        setResolutionError(data?.reason || "No se encontro un programa disponible para esa combinacion.");
++        setResolutionError(data?.reason || "No se encontrÃ³ un programa disponible para esa combinaciÃ³n.");
+       };
+ 
+     resolveCurriculum();
+@@ -363,16 +421,18 @@ export default function CourseNew() {
+       case 2:
+         return !!state.subject;
+       case 3:
+-        return !!state.schoolId;
++        return (
++          !!state.schoolId &&
++          (state.contextMode !== "ORIENTACION" || !!state.orientation.trim()) &&
++          (state.contextMode !== "TECNICATURA" || !!state.speciality.trim())
++        );
+       case 4:
+         return !!state.cycle;
+       case 5:
+         return !!state.yearLevel;
+       case 6:
+-        return !needsOrientation || !!state.orientation.trim();
++        return !!selectedCurriculumId && (resolutionStatus === "resolved" || resolutionStatus === "ambiguous");
+       case 7:
+-        return !needsSpeciality || !!state.speciality.trim();
+-      case 8:
+         return !!selectedCurriculumId && (resolutionStatus === "resolved" || resolutionStatus === "ambiguous");
+       default:
+         return true;
+@@ -381,16 +441,12 @@ export default function CourseNew() {
+ 
+   const nextStep = () => {
+     let next = step + 1;
+-    if (next === 6 && !needsOrientation) next++;
+-    if (next === 7 && !needsSpeciality) next++;
+-    if (next > 9) next = 9;
++    if (next > 7) next = 7;
+     setStep(next);
+   };
+ 
+   const prevStep = () => {
+     let prev = step - 1;
+-    if (prev === 7 && !needsSpeciality) prev--;
+-    if (prev === 6 && !needsOrientation) prev--;
+     if (prev < 1) prev = 1;
+     setStep(prev);
+   };
+@@ -435,7 +491,7 @@ export default function CourseNew() {
+     if (!selectedCurriculumId) {
+       toast({
+         title: "Falta programa oficial",
+-        description: "Resolve y confirma primero el programa oficial del curso.",
++        description: "ResolvÃ© y confirmÃ¡ primero el programa oficial del curso.",
+         variant: "destructive",
+       });
+       return;
+@@ -460,8 +516,8 @@ export default function CourseNew() {
+ 
+       if (!limitData.can_create) {
+         toast({
+-          title: "Limite alcanzado",
+-          description: `Alcanzaste el limite de cursos (${limitData.current}/${limitData.max})`,
++          title: "LÃ­mite alcanzado",
++          description: `Alcanzaste el lÃ­mite de cursos (${limitData.current}/${limitData.max})`,
+           variant: "destructive",
+         });
+         return;
+@@ -474,7 +530,7 @@ export default function CourseNew() {
+         year_level: state.yearLevel!,
+         academic_year: new Date().getFullYear(),
+         orientation: needsOrientation ? state.orientation : null,
+-        speciality: needsSpeciality ? state.speciality : null,
++        speciality: needsSpeciality ? canonicalizeSpeciality(state.speciality) : null,
+       };
+ 
+       const courseDetailUrl = (courseId: string) => {
+@@ -538,7 +594,7 @@ export default function CourseNew() {
+       if (bootstrapError) {
+         toast({
+           title: "Curso creado con bootstrap pendiente",
+-          description: "El curso se creo, pero el borrador inicial del plan no pudo completarse automaticamente.",
++          description: "El curso se creÃ³, pero el borrador inicial del plan no pudo completarse automÃ¡ticamente.",
+           variant: "destructive",
+         });
+         navigate(courseDetailUrl(course!.id));
+@@ -550,11 +606,11 @@ export default function CourseNew() {
+           ? {
+               title: "Curso creado con compatibilidad",
+               description:
+-                "El curso se creo en una base sin curriculum_document_id. El entorno backend remoto aun no incorpora esa columna.",
++                "El curso se creÃ³ en una base sin curriculum_document_id. El backend remoto sigue desactualizado.",
+             }
+           : {
+               title: "Curso creado",
+-              description: "El curso quedo vinculado a su programa oficial y recibio un borrador inicial del plan.",
++              description: "El curso quedÃ³ vinculado a su programa oficial y recibiÃ³ un borrador inicial del plan.",
+             }
+       );
+       navigate(courseDetailUrl(course!.id));
+@@ -577,7 +633,7 @@ export default function CourseNew() {
+           <div>
+             <h1 className="text-lg font-semibold text-foreground">Nuevo curso</h1>
+             <p className="text-sm text-muted-foreground">
+-              Paso {steps.findIndex((item) => item.num === step) + 1} de {steps.length} -{" "}
++              Paso {steps.findIndex((item) => item.num === step) + 1} de {steps.length} â€”{" "}
+               {steps.find((item) => item.num === step)?.label}
+             </p>
+           </div>
+@@ -592,11 +648,9 @@ export default function CourseNew() {
+               {step === 2 && "Materia"}
+               {step === 3 && "Escuela"}
+               {step === 4 && "Ciclo"}
+-              {step === 5 && "Ano"}
+-              {step === 6 && "Orientacion"}
+-              {step === 7 && "Especialidad"}
+-              {step === 8 && "Programa oficial"}
+-              {step === 9 && "Confirmacion"}
++              {step === 5 && "AÃ±o"}
++              {step === 6 && "Programa oficial"}
++              {step === 7 && "ConfirmaciÃ³n"}
+             </CardTitle>
+           </CardHeader>
+           <CardContent className="space-y-4">
+@@ -619,11 +673,12 @@ export default function CourseNew() {
+                       subject: event.target.value,
+                       cycle: "",
+                       yearLevel: null,
++                      contextMode: "NINGUNA",
+                       orientation: "",
+                       speciality: "",
+                     }))
+                   }
+-                  placeholder="Ej: Filosofia, Historia, Matematica..."
++                  placeholder="Ej: FilosofÃ­a, Historia, MatemÃ¡tica..."
+                 />
+               </div>
+             )}
+@@ -641,12 +696,12 @@ export default function CourseNew() {
+                           setState((prev) => ({
+                             ...prev,
+                             schoolId: value,
+-                            schoolType: school?.school_type || "COMUN",
++                            schoolType: prev.contextMode === "TECNICATURA" ? "TECNICA" : school?.school_type || "COMUN",
+                           }));
+                         }}
+                       >
+                         <SelectTrigger>
+-                          <SelectValue placeholder="Elegi una escuela..." />
++                          <SelectValue placeholder="ElegÃ­ una escuela..." />
+                         </SelectTrigger>
+                         <SelectContent>
+                           {schools.map((school) => (
+@@ -657,6 +712,78 @@ export default function CourseNew() {
+                         </SelectContent>
+                       </Select>
+                     </div>
++                    <div className="space-y-2">
++                      <Label>Modalidad del curso</Label>
++                      <Select
++                        value={state.contextMode}
++                        onValueChange={(value) =>
++                          setState((prev) => ({
++                            ...prev,
++                            contextMode: value as CourseContextMode,
++                            orientation: value === "ORIENTACION" ? prev.orientation : "",
++                            speciality: value === "TECNICATURA" ? prev.speciality : "",
++                            schoolType:
++                              value === "TECNICATURA"
++                                ? "TECNICA"
++                                : selectedSchool?.school_type || prev.schoolType,
++                          }))
++                        }
++                      >
++                        <SelectTrigger>
++                          <SelectValue />
++                        </SelectTrigger>
++                        <SelectContent>
++                          <SelectItem value="NINGUNA">Ninguna / Normal</SelectItem>
++                          <SelectItem value="ORIENTACION">OrientaciÃ³n</SelectItem>
++                          <SelectItem value="TECNICATURA">Tecnicatura</SelectItem>
++                        </SelectContent>
++                      </Select>
++                      <p className="text-xs text-muted-foreground">
++                        DefinÃ­ si este curso usa orientaciÃ³n, tecnicatura o ninguna modalidad extra.
++                      </p>
++                    </div>
++                    {state.contextMode === "ORIENTACION" && (
++                      <div className="space-y-2">
++                        <Label>OrientaciÃ³n</Label>
++                        <Input
++                          list="orientation-options"
++                          value={state.orientation}
++                          onChange={(event) =>
++                            setState((prev) => ({ ...prev, orientation: event.target.value }))
++                          }
++                          placeholder="Ej: Ciencias Sociales, EconomÃ­a y AdministraciÃ³n..."
++                        />
++                        <datalist id="orientation-options">
++                          {ORIENTATION_SUGGESTIONS.map((orientation) => (
++                            <option key={orientation} value={orientation} />
++                          ))}
++                        </datalist>
++                        <p className="text-xs text-muted-foreground">
++                          PodÃ©s elegir una sugerencia oficial o escribir una variante local.
++                        </p>
++                      </div>
++                    )}
++                    {state.contextMode === "TECNICATURA" && (
++                      <div className="space-y-2">
++                        <Label>Tecnicatura / especialidad</Label>
++                        <Input
++                          list="speciality-options"
++                          value={state.speciality}
++                          onChange={(event) =>
++                            setState((prev) => ({ ...prev, speciality: event.target.value }))
++                          }
++                          placeholder="Ej: TÃ©cnico en InformÃ¡tica Personal y Profesional..."
++                        />
++                        <datalist id="speciality-options">
++                          {TECH_SPECIALITY_SUGGESTIONS.map((speciality) => (
++                            <option key={speciality} value={speciality} />
++                          ))}
++                        </datalist>
++                        <p className="text-xs text-muted-foreground">
++                          Alias locales como â€œInformÃ¡ticaâ€ o â€œProgramaciÃ³nâ€ se normalizan al nombre canÃ³nico.
++                        </p>
++                      </div>
++                    )}
+                     <Button
+                       variant="outline"
+                       size="sm"
+@@ -710,8 +837,8 @@ export default function CourseNew() {
+                           <SelectValue />
+                         </SelectTrigger>
+                         <SelectContent>
+-                          <SelectItem value="COMUN">Comun</SelectItem>
+-                          <SelectItem value="TECNICA">Tecnica</SelectItem>
++                          <SelectItem value="COMUN">ComÃºn</SelectItem>
++                          <SelectItem value="TECNICA">TÃ©cnica</SelectItem>
+                         </SelectContent>
+                       </Select>
+                     </div>
+@@ -742,17 +869,22 @@ export default function CourseNew() {
+                       ...prev,
+                       cycle: value as Cycle,
+                       yearLevel: null,
+-                      orientation: "",
+-                      speciality: "",
++                      ...(value === "BASIC"
++                        ? {
++                            contextMode: "NINGUNA" as CourseContextMode,
++                            orientation: "",
++                            speciality: "",
++                          }
++                        : {}),
+                     }))
+                   }
+                 >
+                   <SelectTrigger>
+-                        <SelectValue placeholder="Elegi ciclo..." />
++                        <SelectValue placeholder="ElegÃ­ ciclo..." />
+                       </SelectTrigger>
+                       <SelectContent>
+                         {availableCycles.includes("BASIC") && (
+-                          <SelectItem value="BASIC">Ciclo Basico (1 a 3)</SelectItem>
++                          <SelectItem value="BASIC">Ciclo BÃ¡sico (1 a 3)</SelectItem>
+                         )}
+                         {availableCycles.includes("UPPER") && (
+                           <SelectItem value="UPPER">Ciclo Superior (4 a 6)</SelectItem>
+@@ -760,14 +892,14 @@ export default function CourseNew() {
+                       </SelectContent>
+                     </Select>
+                     <p className="text-xs text-muted-foreground">
+-                      Selecciona el ciclo para ayudar a resolver el programa oficial correcto.
++                      SeleccionÃ¡ el ciclo para ayudar a resolver el programa oficial correcto.
+                     </p>
+               </div>
+             )}
+ 
+             {step === 5 && (
+               <div className="space-y-2">
+-                <Label>Ano</Label>
++                <Label>AÃ±o</Label>
+                 <Select
+                   value={state.yearLevel?.toString() || ""}
+                   onValueChange={(value) =>
+@@ -775,60 +907,45 @@ export default function CourseNew() {
+                   }
+                 >
+                   <SelectTrigger>
+-                    <SelectValue placeholder="Elegi ano..." />
++                    <SelectValue placeholder="ElegÃ­ aÃ±o..." />
+                   </SelectTrigger>
+                   <SelectContent>
+                     {yearOptions.map((year) => (
+                       <SelectItem key={year} value={year.toString()}>
+-                        {year} ano
++                        {year} aÃ±o
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
+                 <p className="text-xs text-muted-foreground">
+-                  Selecciona el ano para ajustar la resolucion del diseno curricular.
++                  SeleccionÃ¡ el aÃ±o para ajustar la resoluciÃ³n del diseÃ±o curricular.
+                 </p>
+               </div>
+             )}
+ 
+-            {step === 6 && needsOrientation && (
+-              <div className="space-y-2">
+-                <Label>Orientacion</Label>
+-                <Input
+-                  value={state.orientation}
+-                  onChange={(event) =>
+-                    setState((prev) => ({ ...prev, orientation: event.target.value }))
+-                  }
+-                  placeholder="Ej: Ciencias Sociales, Economia y Administracion..."
+-                />
+-              </div>
+-            )}
+-
+-            {step === 7 && needsSpeciality && (
+-              <div className="space-y-2">
+-                <Label>Especialidad</Label>
+-                <Input
+-                  value={state.speciality}
+-                  onChange={(event) =>
+-                    setState((prev) => ({ ...prev, speciality: event.target.value }))
+-                  }
+-                  placeholder="Ej: Electromecanica, Informatica..."
+-                />
+-              </div>
+-            )}
+-
+-            {step === 8 && (
++            {step === 6 && (
+               <div className="space-y-4">
+                 <div className="space-y-1">
+                   <Label>Programa oficial</Label>
+                   <p className="text-sm text-muted-foreground">
+-                    Antes de crear el curso resolvemos el diseno curricular oficial para que la planificacion tenga una base curricular explicita.
++                    Antes de crear el curso resolvemos el diseÃ±o curricular oficial para que la planificaciÃ³n tenga una base curricular explÃ­cita.
+                   </p>
+                 </div>
+ 
+                 {resolutionStatus === "resolving" && (
+-                  <div className="rounded-md border p-4 text-sm text-muted-foreground">
+-                    Buscando y resolviendo el programa oficial correspondiente...
++                  <div className="rounded-md border p-4">
++                    <div className="curriculum-book-loader">
++                      <div className="curriculum-book-icon" aria-hidden="true">
++                        <span className="curriculum-book-cover" />
++                        <span className="curriculum-book-page curriculum-book-page-1" />
++                        <span className="curriculum-book-page curriculum-book-page-2" />
++                        <span className="curriculum-book-page curriculum-book-page-3" />
++                      </div>
++                      <div className="space-y-1 text-sm text-muted-foreground">
++                        <p>Buscando y resolviendo el programa oficial correspondiente...</p>
++                        <p className="text-xs">Revisamos base curricular, coincidencias y dominio oficial.</p>
++                      </div>
++                    </div>
+                   </div>
+                 )}
+ 
+@@ -836,7 +953,7 @@ export default function CourseNew() {
+                   <div className="space-y-3 rounded-md border p-4">
+                     {resolutionStatus === "ambiguous" && curriculumCandidates.length > 1 && (
+                       <div className="space-y-2">
+-                        <Label>Elegi el documento correcto</Label>
++                        <Label>ElegÃ­ el documento correcto</Label>
+                         <Select value={selectedCurriculumId} onValueChange={setSelectedCurriculumId}>
+                           <SelectTrigger>
+                             <SelectValue />
+@@ -861,7 +978,7 @@ export default function CourseNew() {
+                       </p>
+                       <p>
+                         <span className="text-muted-foreground">Dominio oficial:</span>{" "}
+-                        {selectedCurriculum.is_official_domain ? "Si" : "No verificado"}
++                        {selectedCurriculum.is_official_domain ? "SÃ­" : "No verificado"}
+                       </p>
+                     </div>
+ 
+@@ -877,7 +994,7 @@ export default function CourseNew() {
+                       </a>
+                     ) : (
+                       <p className="text-sm text-muted-foreground">
+-                        El documento fue resuelto en la base curricular pero todavia no tiene URL oficial registrada.
++                        El documento fue resuelto en la base curricular, pero todavÃ­a no tiene URL oficial registrada.
+                       </p>
+                     )}
+                   </div>
+@@ -886,9 +1003,9 @@ export default function CourseNew() {
+                 {resolutionStatus === "ambiguous" && !selectedCurriculum && curriculumCandidates.length > 0 && (
+                   <div className="space-y-3 rounded-md border border-warning/40 bg-warning/5 p-4">
+                     <div className="space-y-1">
+-                      <p className="text-sm font-medium">Hay mas de un programa posible para esta combinacion.</p>
++                      <p className="text-sm font-medium">Hay mÃ¡s de un programa posible para esta combinaciÃ³n.</p>
+                       <p className="text-sm text-muted-foreground">
+-                        Revise el alcance de cada documento y seleccione manualmente el correcto antes de crear el curso.
++                        RevisÃ¡ el alcance de cada documento y seleccionÃ¡ manualmente el correcto antes de crear el curso.
+                       </p>
+                     </div>
+                     <div className="space-y-2">
+@@ -904,7 +1021,7 @@ export default function CourseNew() {
+                             {candidateScopeLabel(candidate)}
+                           </p>
+                           <p className="text-xs text-muted-foreground">
+-                            Fuente: {candidate.source_provider} · Dominio oficial: {candidate.is_official_domain ? "Si" : "No verificado"}
++                            Fuente: {candidate.source_provider} | Dominio oficial: {candidate.is_official_domain ? "SÃ­" : "No verificado"}
+                           </p>
+                         </button>
+                       ))}
+@@ -930,7 +1047,7 @@ export default function CourseNew() {
+                       rel="noreferrer"
+                       className="inline-flex items-center gap-2 underline underline-offset-4"
+                     >
+-                      Revisar indice oficial de disenos curriculares
++                      Revisar Ã­ndice oficial de diseÃ±os curriculares
+                       <ExternalLink className="h-4 w-4" />
+                     </a>
+                   </div>
+@@ -938,7 +1055,7 @@ export default function CourseNew() {
+               </div>
+             )}
+ 
+-            {step === 9 && (
++            {step === 7 && (
+               <div className="space-y-3">
+                 <div className="grid grid-cols-2 gap-2 text-sm">
+                   <span className="text-muted-foreground">Provincia:</span>
+@@ -950,19 +1067,21 @@ export default function CourseNew() {
+                   <span className="text-muted-foreground">Tipo:</span>
+                   <span>{state.schoolType}</span>
+                   <span className="text-muted-foreground">Ciclo:</span>
+-                  <span>{state.cycle === "BASIC" ? "Basico" : "Superior"}</span>
+-                  <span className="text-muted-foreground">Ano:</span>
++                  <span>{state.cycle === "BASIC" ? "BÃ¡sico" : "Superior"}</span>
++                  <span className="text-muted-foreground">AÃ±o:</span>
+                   <span>{state.yearLevel}</span>
++                  <span className="text-muted-foreground">Modalidad:</span>
++                  <span>{contextModeLabel(state.contextMode)}</span>
+                   {needsOrientation && (
+                     <>
+-                      <span className="text-muted-foreground">Orientacion:</span>
++                      <span className="text-muted-foreground">OrientaciÃ³n:</span>
+                       <span>{state.orientation}</span>
+                     </>
+                   )}
+                   {needsSpeciality && (
+                     <>
+                       <span className="text-muted-foreground">Especialidad:</span>
+-                      <span>{state.speciality}</span>
++                      <span>{canonicalizeSpeciality(state.speciality)}</span>
+                     </>
+                   )}
+                   <span className="text-muted-foreground">Programa oficial:</span>
+@@ -976,7 +1095,7 @@ export default function CourseNew() {
+                 <ArrowLeft className="h-4 w-4 mr-2" />
+                 Anterior
+               </Button>
+-              {step === 9 ? (
++              {step === 7 ? (
+                 <Button onClick={handleCreate} disabled={creating}>
+                   {creating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
+                   Crear curso
+@@ -994,3 +1113,4 @@ export default function CourseNew() {
+     </div>
+   );
+ }
++
+diff --git a/src/components/plan/PlanEditor.tsx b/src/components/plan/PlanEditor.tsx
+index 2e35f41..b7e8228 100644
+--- a/src/components/plan/PlanEditor.tsx
++++ b/src/components/plan/PlanEditor.tsx
+@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
+ import { Badge } from "@/components/ui/badge";
+ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+ import { Label } from "@/components/ui/label";
+-import { X, Plus, RotateCcw, ShieldCheck } from "lucide-react";
++import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
++import { X, Plus, RotateCcw, ShieldCheck, Maximize2 } from "lucide-react";
+ import { toast } from "@/hooks/use-toast";
+ import PlanObjectivesEditor from "./PlanObjectivesEditor";
+ import PlanLessonsEditor from "./PlanLessonsEditor";
+@@ -21,6 +22,22 @@ interface PlanData {
+   resources: string;
+ }
+ 
++interface MappedCurriculumNode {
++  id: string;
++  name: string;
++  node_type: string;
++  order_index?: number | null;
++}
++
++type ExpandableField = "fundamentacion" | "estrategias_marco" | "evaluacion_marco" | "resources";
++
++const fieldTitles: Record<ExpandableField, string> = {
++  fundamentacion: "Fundamentacion",
++  estrategias_marco: "Estrategias marco",
++  evaluacion_marco: "Evaluacion marco",
++  resources: "Recursos",
++};
++
+ interface Props {
+   planId: string;
+   courseId: string;
+@@ -84,6 +101,37 @@ function buildRepairGuidance(errors: string[]) {
+   return Array.from(new Set([...steps, ...lessonRepairs]));
+ }
+ 
++function isLikelyBibliographyNode(name: string): boolean {
++  const trimmed = name.trim();
++  const commaCount = (trimmed.match(/,/g) || []).length;
++  const hasAuthorPrefix = /^[A-ZÁÉÍÓÚÑ][^,]{1,90},/.test(trimmed);
++  const hasYear = /\b(1[89]\d{2}|20\d{2})\b/.test(trimmed);
++  const hasEditionFallback = /\bvarias\s+ediciones\b/i.test(trimmed);
++
++  return hasAuthorPrefix && commaCount >= 2 && (hasYear || hasEditionFallback || commaCount >= 3);
++}
++
++function isAuthorityOrNoiseNode(name: string): boolean {
++  const normalized = name
++    .normalize("NFD")
++    .replace(/[\u0300-\u036f]/g, "")
++    .toLowerCase()
++    .replace(/\s+/g, "");
++
++  return (
++    normalized.includes("isbn") ||
++    normalized.includes("cdd") ||
++    normalized.includes("disenocurricular") ||
++    normalized.includes("educacionsecundaria") ||
++    normalized.includes("directorageneral") ||
++    normalized.includes("presidentadelconsejo") ||
++    normalized.includes("subsecretariadeeducacion") ||
++    normalized.includes("directoraprovincial") ||
++    normalized.includes("equipodeespecialistas") ||
++    normalized.includes("autoridades")
++  );
++}
++
+ export default function PlanEditor({
+   planId,
+   courseId,
+@@ -98,6 +146,8 @@ export default function PlanEditor({
+   const [bootstrapping, setBootstrapping] = useState(false);
+   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+   const [newStrategy, setNewStrategy] = useState("");
++  const [expandedField, setExpandedField] = useState<ExpandableField | null>(null);
++  const [mappedNodes, setMappedNodes] = useState<MappedCurriculumNode[]>([]);
+   const [currentStatus, setCurrentStatus] = useState(planStatus);
+   const [hasEditedAfterValidation, setHasEditedAfterValidation] = useState(false);
+   const transitioningRef = useRef(false);
+@@ -111,6 +161,27 @@ export default function PlanEditor({
+     setHasEditedAfterValidation(planStatus === "EDITED");
+   }, [planStatus]);
+ 
++  const fetchMappedNodes = useCallback(async () => {
++    const { data: mappings } = await supabase
++      .from("plan_content_mappings")
++      .select("curriculum_node_id")
++      .eq("plan_id", planId);
++
++    const nodeIds = Array.from(new Set((mappings || []).map((mapping) => mapping.curriculum_node_id)));
++    if (nodeIds.length === 0) {
++      setMappedNodes([]);
++      return;
++    }
++
++    const { data: nodes } = await supabase
++      .from("curriculum_nodes")
++      .select("id, name, node_type, order_index")
++      .in("id", nodeIds)
++      .order("order_index");
++
++    setMappedNodes((nodes || []) as MappedCurriculumNode[]);
++  }, [planId]);
++
+   useEffect(() => {
+     const fetch = async () => {
+       const { data } = await supabase
+@@ -120,11 +191,12 @@ export default function PlanEditor({
+         .single();
+ 
+       if (data) setPlan(data);
++      await fetchMappedNodes();
+       setLoading(false);
+     };
+ 
+     fetch();
+-  }, [planId]);
++  }, [planId, fetchMappedNodes]);
+ 
+   const transitionToEdited = useCallback(async () => {
+     if (transitioningRef.current || readOnly) return;
+@@ -207,6 +279,7 @@ export default function PlanEditor({
+         .single();
+ 
+       if (refreshedPlan) setPlan(refreshedPlan);
++      await fetchMappedNodes();
+ 
+       const nextStatus =
+         data?.plan_status === "EDITED" || data?.plan_status === "VALIDATED" ? data.plan_status : "INCOMPLETE";
+@@ -282,6 +355,10 @@ export default function PlanEditor({
+     }
+   };
+ 
++  const visibleMappedNodes = mappedNodes.filter((node) => !isAuthorityOrNoiseNode(node.name));
++  const bibliographyNodes = visibleMappedNodes.filter((node) => isLikelyBibliographyNode(node.name));
++  const curricularNodes = visibleMappedNodes.filter((node) => !isLikelyBibliographyNode(node.name));
++
+   const ctaLabel = currentStatus === "EDITED" ? "Validar cambios" : "Validar plan";
+   const showCta = !readOnly && !courseArchived && currentStatus !== "VALIDATED";
+ 
+@@ -332,36 +409,52 @@ export default function PlanEditor({
+         )}
+ 
+         <Tabs defaultValue="fundamentacion">
+-          <TabsList className="grid w-full grid-cols-6">
++          <TabsList className="grid w-full grid-cols-8">
+             <TabsTrigger value="fundamentacion">Fundamentacion</TabsTrigger>
+             <TabsTrigger value="estrategias">Estrategias</TabsTrigger>
+             <TabsTrigger value="evaluacion">Evaluacion</TabsTrigger>
+             <TabsTrigger value="recursos">Recursos</TabsTrigger>
++            <TabsTrigger value="contenidos">Contenidos</TabsTrigger>
++            <TabsTrigger value="bibliografia">Bibliografia</TabsTrigger>
+             <TabsTrigger value="propositos">Propositos</TabsTrigger>
+             <TabsTrigger value="clases">Clases</TabsTrigger>
+           </TabsList>
+ 
+           <TabsContent value="fundamentacion" className="space-y-2 pt-2">
+-            <Label>Fundamentacion</Label>
++            <div className="flex items-center justify-between gap-2">
++              <Label>Fundamentacion</Label>
++              <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedField("fundamentacion")}>
++                <Maximize2 className="mr-2 h-4 w-4" />
++                Expandir
++              </Button>
++            </div>
+             <Textarea
+               value={plan.fundamentacion}
+               onChange={(e) => updateField("fundamentacion", e.target.value)}
+               placeholder="Escribir la fundamentacion del plan..."
+               rows={6}
+               disabled={readOnly}
++              onDoubleClick={() => setExpandedField("fundamentacion")}
+             />
+             <p className="text-xs text-muted-foreground">{plan.fundamentacion.length} caracteres</p>
+           </TabsContent>
+ 
+           <TabsContent value="estrategias" className="space-y-4 pt-2">
+             <div className="space-y-2">
+-              <Label>Estrategias marco</Label>
++              <div className="flex items-center justify-between gap-2">
++                <Label>Estrategias marco</Label>
++                <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedField("estrategias_marco")}>
++                  <Maximize2 className="mr-2 h-4 w-4" />
++                  Expandir
++                </Button>
++              </div>
+               <Textarea
+                 value={plan.estrategias_marco}
+                 onChange={(e) => updateField("estrategias_marco", e.target.value)}
+                 placeholder="Describir las estrategias generales..."
+                 rows={4}
+                 disabled={readOnly}
++                onDoubleClick={() => setExpandedField("estrategias_marco")}
+               />
+             </div>
+ 
+@@ -396,27 +489,85 @@ export default function PlanEditor({
+           </TabsContent>
+ 
+           <TabsContent value="evaluacion" className="space-y-2 pt-2">
+-            <Label>Evaluacion marco</Label>
++            <div className="flex items-center justify-between gap-2">
++              <Label>Evaluacion marco</Label>
++              <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedField("evaluacion_marco")}>
++                <Maximize2 className="mr-2 h-4 w-4" />
++                Expandir
++              </Button>
++            </div>
+             <Textarea
+               value={plan.evaluacion_marco}
+               onChange={(e) => updateField("evaluacion_marco", e.target.value)}
+               placeholder="Describir el marco de evaluacion..."
+               rows={6}
+               disabled={readOnly}
++              onDoubleClick={() => setExpandedField("evaluacion_marco")}
+             />
+           </TabsContent>
+ 
+           <TabsContent value="recursos" className="space-y-2 pt-2">
+-            <Label>Recursos</Label>
++            <div className="flex items-center justify-between gap-2">
++              <Label>Recursos</Label>
++              <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedField("resources")}>
++                <Maximize2 className="mr-2 h-4 w-4" />
++                Expandir
++              </Button>
++            </div>
+             <Textarea
+               value={plan.resources}
+               onChange={(e) => updateField("resources", e.target.value)}
+               placeholder="Describir materiales, soportes y alternativas low-tech..."
+               rows={5}
+               disabled={readOnly}
++              onDoubleClick={() => setExpandedField("resources")}
+             />
+           </TabsContent>
+ 
++          <TabsContent value="contenidos" className="space-y-4 pt-2">
++            <div className="rounded-md border p-3">
++              <p className="text-sm font-medium">Nodos curriculares del plan</p>
++              <p className="text-xs text-muted-foreground">
++                {curricularNodes.length} nodos mapeados para trazabilidad de clases.
++              </p>
++              <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
++                {curricularNodes.length > 0 ? (
++                  curricularNodes.map((node) => (
++                    <p key={node.id} className="text-sm">
++                      <span className="font-medium text-muted-foreground">[{node.node_type}]</span> {node.name}
++                    </p>
++                  ))
++                ) : (
++                  <p className="text-sm text-muted-foreground">
++                    No hay nodos curriculares mapeados. Revisa el programa oficial y vuelve a rearmar el borrador.
++                  </p>
++                )}
++              </div>
++            </div>
++          </TabsContent>
++
++          <TabsContent value="bibliografia" className="space-y-4 pt-2">
++            <div className="rounded-md border p-3">
++              <p className="text-sm font-medium">Bibliografia detectada</p>
++              <p className="text-xs text-muted-foreground">
++                {bibliographyNodes.length} fuentes detectadas para soporte de brief y materiales.
++              </p>
++              <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
++                {bibliographyNodes.length > 0 ? (
++                  bibliographyNodes.map((node) => (
++                    <p key={node.id} className="text-sm">
++                      <span className="font-medium text-muted-foreground">[FUENTE]</span> {node.name}
++                    </p>
++                  ))
++                ) : (
++                  <p className="text-sm text-muted-foreground">
++                    No se detectaron fuentes bibliograficas en el mapeo actual. Reimporta el programa y rearma el borrador.
++                  </p>
++                )}
++              </div>
++            </div>
++          </TabsContent>
++
+           <TabsContent value="propositos" className="pt-2">
+             <PlanObjectivesEditor planId={planId} readOnly={readOnly} onDirty={transitionToEdited} />
+           </TabsContent>
+@@ -432,6 +583,26 @@ export default function PlanEditor({
+             {validating ? "Validando..." : ctaLabel}
+           </Button>
+         )}
++
++        <Dialog open={!!expandedField} onOpenChange={(open) => !open && setExpandedField(null)}>
++          <DialogContent className="max-w-5xl">
++            <DialogHeader>
++              <DialogTitle>{expandedField ? fieldTitles[expandedField] : "Editor"}</DialogTitle>
++            </DialogHeader>
++            {expandedField && (
++              <div className="space-y-2">
++                <Textarea
++                  value={plan[expandedField]}
++                  onChange={(event) => updateField(expandedField, event.target.value)}
++                  rows={24}
++                  disabled={readOnly}
++                  className="max-h-[70vh] min-h-[60vh]"
++                />
++                <p className="text-xs text-muted-foreground">{plan[expandedField].length} caracteres</p>
++              </div>
++            )}
++          </DialogContent>
++        </Dialog>
+       </CardContent>
+     </Card>
+   );
+diff --git a/src/components/lesson/BibliographySelector.tsx b/src/components/lesson/BibliographySelector.tsx
+index 057229f..edcd9cc 100644
+--- a/src/components/lesson/BibliographySelector.tsx
++++ b/src/components/lesson/BibliographySelector.tsx
+@@ -11,13 +11,53 @@ interface Node {
+ 
+ interface BibliographySelectorProps {
+   courseId: string;
++  lessonId?: string;
+   selected: string[];
+   onChange: (ids: string[]) => void;
+   disabled?: boolean;
+ }
+ 
++function normalizeName(value: string): string {
++  return value
++    .normalize("NFD")
++    .replace(/[\u0300-\u036f]/g, "")
++    .toLowerCase()
++    .replace(/\s+/g, " ")
++    .trim();
++}
++
++function shouldHideNode(name: string): boolean {
++  const normalized = normalizeName(name);
++  return (
++    normalized.startsWith("isbn ") ||
++    normalized.startsWith("cdd ") ||
++    normalized === "equipo de especialistas" ||
++    normalized.startsWith("diseno curricular para") ||
++    normalized.startsWith("educacion secundaria") ||
++    /^lic\.\s+/.test(normalized)
++  );
++}
++
++function isLikelyBibliographyEntry(name: string): boolean {
++  if (shouldHideNode(name)) return false;
++
++  const normalized = normalizeName(name);
++  const commaCount = (name.match(/,/g) || []).length;
++  const hasYear = /\b(1[89]\d{2}|20\d{2})\b/.test(name);
++  const hasEditionFallback = /\bvarias\s+ediciones\b/i.test(name);
++  const hasAuthorPrefix = /^[A-ZÁÉÍÓÚÑ][^,]{1,90},/.test(name.trim());
++
++  if (normalized.includes("dgcye | diseno curricular")) return false;
++  if (!hasAuthorPrefix) return false;
++  if (commaCount < 3) return false;
++  if (!hasYear && !hasEditionFallback && commaCount < 4) return false;
++
++  return true;
++}
++
+ export default function BibliographySelector({
+   courseId,
++  lessonId,
+   selected,
+   onChange,
+   disabled,
+@@ -27,36 +67,115 @@ export default function BibliographySelector({
+ 
+   useEffect(() => {
+     const fetchNodes = async () => {
+-      const { data: plan } = await supabase.from("plans").select("id").eq("course_id", courseId).single();
+-
+-      if (!plan) {
++      setLoading(true);
++
++      const cleanCandidates = (rawNodes: Array<Node & { order_index?: number }>): Node[] => {
++        const contentFirst = rawNodes.filter((node) =>
++          ["CONTENIDO", "BLOQUE", "UNIDAD"].includes(node.node_type)
++        );
++        const candidates = contentFirst.length > 0 ? contentFirst : rawNodes;
++        const bibliographyOnly = candidates.filter((node) => isLikelyBibliographyEntry(node.name));
++        const filtered = bibliographyOnly.filter((node) => !shouldHideNode(node.name));
++        const dedupMap = new Map<string, Node>();
++        filtered.forEach((node) => {
++          const key = `${node.node_type}:${normalizeName(node.name)}`;
++          if (!dedupMap.has(key)) dedupMap.set(key, node);
++        });
++        return Array.from(dedupMap.values());
++      };
++
++      const fetchNodesByIds = async (ids: string[]): Promise<Node[]> => {
++        const dedupedIds = Array.from(new Set(ids.filter(Boolean)));
++        if (dedupedIds.length === 0) return [];
++
++        const { data: nodesData } = await supabase
++          .from("curriculum_nodes")
++          .select("id, name, node_type, order_index")
++          .in("id", dedupedIds)
++          .order("order_index");
++
++        return cleanCandidates((nodesData || []) as Array<Node & { order_index?: number }>);
++      };
++
++      try {
++        const { data: plan } = await supabase.from("plans").select("id").eq("course_id", courseId).single();
++        if (!plan) {
++          setNodes([]);
++          return;
++        }
++
++        const nodeIdSources: string[][] = [];
++
++        if (lessonId) {
++          const { data: lesson } = await supabase
++            .from("lessons")
++            .select("plan_lesson_id")
++            .eq("id", lessonId)
++            .maybeSingle();
++
++          if (lesson?.plan_lesson_id) {
++            const { data: links } = await supabase
++              .from("plan_lesson_content_links")
++              .select("plan_content_mapping_id")
++              .eq("plan_lesson_id", lesson.plan_lesson_id);
++
++            const mappingIds = (links || []).map((link) => link.plan_content_mapping_id);
++            if (mappingIds.length > 0) {
++              const { data: lessonMappings } = await supabase
++                .from("plan_content_mappings")
++                .select("curriculum_node_id")
++                .in("id", mappingIds);
++
++              nodeIdSources.push((lessonMappings || []).map((mapping) => mapping.curriculum_node_id));
++            }
++          }
++        }
++
++        const { data: planMappings } = await supabase
++          .from("plan_content_mappings")
++          .select("curriculum_node_id")
++          .eq("plan_id", plan.id);
++
++        if ((planMappings || []).length > 0) {
++          nodeIdSources.push((planMappings || []).map((mapping) => mapping.curriculum_node_id));
++        }
++
++        for (const sourceIds of nodeIdSources) {
++          const resolved = await fetchNodesByIds(sourceIds);
++          if (resolved.length > 0) {
++            setNodes(resolved);
++            return;
++          }
++        }
++
++        const { data: courseData, error: courseError } = await supabase
++          .from("courses")
++          .select("curriculum_document_id")
++          .eq("id", courseId)
++          .maybeSingle();
++
++        if (!courseError && courseData?.curriculum_document_id) {
++          const { data: documentNodes } = await supabase
++            .from("curriculum_nodes")
++            .select("id, name, node_type, order_index")
++            .eq("curriculum_document_id", courseData.curriculum_document_id)
++            .order("order_index");
++
++          const fromDocument = cleanCandidates((documentNodes || []) as Array<Node & { order_index?: number }>);
++          if (fromDocument.length > 0) {
++            setNodes(fromDocument);
++            return;
++          }
++        }
++
++        setNodes([]);
++      } finally {
+         setLoading(false);
+-        return;
+       }
+-
+-      const { data: mappings } = await supabase
+-        .from("plan_content_mappings")
+-        .select("curriculum_node_id")
+-        .eq("plan_id", plan.id);
+-
+-      if (!mappings || mappings.length === 0) {
+-        setLoading(false);
+-        return;
+-      }
+-
+-      const nodeIds = mappings.map((mapping) => mapping.curriculum_node_id);
+-      const { data: nodesData } = await supabase
+-        .from("curriculum_nodes")
+-        .select("id, name, node_type")
+-        .in("id", nodeIds)
+-        .order("order_index");
+-
+-      setNodes(nodesData || []);
+-      setLoading(false);
+     };
+ 
+     fetchNodes();
+-  }, [courseId]);
++  }, [courseId, lessonId]);
+ 
+   const toggle = (nodeId: string) => {
+     if (disabled) return;
+@@ -75,7 +194,11 @@ export default function BibliographySelector({
+   }
+ 
+   if (nodes.length === 0) {
+-    return <p className="text-sm text-muted-foreground">No hay contenidos curriculares mapeados en el plan.</p>;
++    return (
++      <p className="text-sm text-muted-foreground">
++        No hay fuentes curriculares limpias para esta clase. Revisa mapeos de contenidos en la anual.
++      </p>
++    );
+   }
+ 
+   return (
+@@ -90,7 +213,7 @@ export default function BibliographySelector({
+               disabled={disabled || (!selected.includes(node.id) && selected.length >= 5)}
+             />
+             <div className="text-sm">
+-              <span className="font-medium text-muted-foreground">[{node.node_type}]</span> {node.name}
++              <span className="font-medium text-muted-foreground">[FUENTE]</span> {node.name}
+             </div>
+           </div>
+         ))}
+diff --git a/src/pages/Lesson.tsx b/src/pages/Lesson.tsx
+index 21d3e10..e694d82 100644
+--- a/src/pages/Lesson.tsx
++++ b/src/pages/Lesson.tsx
+@@ -16,6 +16,7 @@ import { useEntitlements } from "@/hooks/useEntitlements";
+ import { StatusBadge, briefLabel, briefTone, materialLabel, materialTone, lessonStatusLabel, lessonStatusTone } from "@/components/ui/StatusBadge";
+ import { StepHeader } from "@/components/ui/StepHeader";
+ import { SkeletonList } from "@/components/ui/SkeletonList";
++import { ThinkingBook } from "@/components/ui/ThinkingBook";
+ 
+ function extractCanonSummary(activitiesSummary?: string | null, fallbackTheme?: string | null) {
+   const summary = (activitiesSummary || "").trim();
+@@ -37,6 +38,53 @@ function extractCanonSummary(activitiesSummary?: string | null, fallbackTheme?:
+   };
+ }
+ 
++function isLikelyBibliographyEntry(name: string): boolean {
++  const trimmed = name.trim();
++  const commaCount = (trimmed.match(/,/g) || []).length;
++  const hasAuthorPrefix = /^[A-ZÁÉÍÓÚÑ][^,]{1,90},/.test(trimmed);
++  const hasYear = /\b(1[89]\d{2}|20\d{2})\b/.test(trimmed);
++  const hasEditionFallback = /\bvarias\s+ediciones\b/i.test(trimmed);
++
++  return hasAuthorPrefix && commaCount >= 2 && (hasYear || hasEditionFallback || commaCount >= 3);
++}
++
++function isNoiseNode(name: string): boolean {
++  const normalized = name
++    .normalize("NFD")
++    .replace(/[\u0300-\u036f]/g, "")
++    .toLowerCase()
++    .replace(/\s+/g, "");
++
++  return (
++    normalized.includes("isbn") ||
++    normalized.includes("cdd") ||
++    normalized.includes("disenocurricular") ||
++    normalized.includes("educacionsecundaria") ||
++    normalized.includes("directorageneral") ||
++    normalized.includes("presidentadelconsejo") ||
++    normalized.includes("subsecretariadeeducacion") ||
++    normalized.includes("directoraprovincial") ||
++    normalized.includes("autoridades")
++  );
++}
++
++async function parseFunctionErrorMessage(error: any): Promise<string> {
++  if (!error) return "Error desconocido";
++  if (typeof error.message === "string" && !error.context) return error.message;
++
++  try {
++    const context = error.context as Response | undefined;
++    if (context) {
++      const payload = await context.json();
++      if (payload?.error) return payload.error;
++    }
++  } catch {
++    // Ignore context parsing errors.
++  }
++
++  return typeof error.message === "string" ? error.message : "Error desconocido";
++}
++
+ export default function Lesson() {
+   const { lessonId } = useParams<{ lessonId: string }>();
+   const { entitlements } = useEntitlements();
+@@ -97,7 +145,7 @@ export default function Lesson() {
+             .select("id, name, node_type")
+             .in("id", nodeIds)
+             .order("order_index");
+-          setMappedCurriculumNodes(mappedNodes || []);
++          setMappedCurriculumNodes((mappedNodes || []).filter((node) => !isNoiseNode(node.name)));
+         } else {
+           setMappedCurriculumNodes([]);
+         }
+@@ -113,7 +161,8 @@ export default function Lesson() {
+         .from("curriculum_nodes")
+         .select("id, name, node_type")
+         .in("id", briefRes.data.bibliografia_confirmada);
+-      setBibliographyNodes(nodes || []);
++      const filteredSources = (nodes || []).filter((node) => isLikelyBibliographyEntry(node.name));
++      setBibliographyNodes(filteredSources);
+     } else {
+       setBibliographyNodes([]);
+     }
+@@ -131,7 +180,11 @@ export default function Lesson() {
+         body: { lesson_id: lessonId },
+       });
+       if (error) {
+-        toast({ title: "Error al generar", description: error.message, variant: "destructive" });
++        toast({
++          title: "Error al generar",
++          description: await parseFunctionErrorMessage(error),
++          variant: "destructive",
++        });
+         return;
+       }
+       if (data?.error) {
+@@ -155,7 +208,11 @@ export default function Lesson() {
+         body: { lesson_id: lessonId, regenerate_only: "teaching" },
+       });
+       if (error) {
+-        toast({ title: "Error al regenerar", description: error.message, variant: "destructive" });
++        toast({
++          title: "Error al regenerar",
++          description: await parseFunctionErrorMessage(error),
++          variant: "destructive",
++        });
+         return;
+       }
+       if (data?.error) {
+@@ -176,7 +233,11 @@ export default function Lesson() {
+         body: { lesson_id: lessonId, regenerate_only: "reading" },
+       });
+       if (error) {
+-        toast({ title: "Error al regenerar", description: error.message, variant: "destructive" });
++        toast({
++          title: "Error al regenerar",
++          description: await parseFunctionErrorMessage(error),
++          variant: "destructive",
++        });
+         return;
+       }
+       if (data?.error) {
+@@ -281,6 +342,17 @@ export default function Lesson() {
+       <main className="mx-auto max-w-6xl px-4 py-8">
+         <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
+           <div className="space-y-8">
++            {lesson.is_generating && (
++              <Card>
++                <CardContent className="pt-6">
++                  <ThinkingBook
++                    title="Estamos elaborando el material de la clase"
++                    detail="Cuando termine, la seccion de materiales se actualiza automaticamente."
++                  />
++                </CardContent>
++              </Card>
++            )}
++
+             {planLesson && (
+               <Card>
+                 <CardHeader className="pb-3">
+@@ -336,7 +408,7 @@ export default function Lesson() {
+                       {bibliographyNodes.length > 0 ? (
+                         bibliographyNodes.map((node) => (
+                           <Badge key={node.id} variant="secondary">
+-                            [{node.node_type}] {node.name}
++                            [FUENTE] {node.name}
+                           </Badge>
+                         ))
+                       ) : (
+@@ -359,7 +431,7 @@ export default function Lesson() {
+                         {referencedNodes.length > 0 ? (
+                           referencedNodes.map((node) => (
+                             <Badge key={node.id} variant="outline">
+-                              [{node.node_type}] {node.name}
++                              [FUENTE] {node.name}
+                             </Badge>
+                           ))
+                         ) : (
+diff --git a/src/components/lesson/ReadingMaterialView.tsx b/src/components/lesson/ReadingMaterialView.tsx
+index 7b66c0a..d02ec68 100644
+--- a/src/components/lesson/ReadingMaterialView.tsx
++++ b/src/components/lesson/ReadingMaterialView.tsx
+@@ -1,8 +1,10 @@
++import { useState } from "react";
+ import { Badge } from "@/components/ui/badge";
+ import { Card, CardContent } from "@/components/ui/card";
+ import { Button } from "@/components/ui/button";
+ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+-import { AlertTriangle, Download, Eye } from "lucide-react";
++import { AlertTriangle, Copy, Download, Eye } from "lucide-react";
++import { supabase } from "@/integrations/supabase/client";
+ 
+ interface ReadingMaterialViewProps {
+   material: {
+@@ -28,6 +30,8 @@ const statusVariant = (s: string): "default" | "secondary" | "destructive" => {
+ };
+ 
+ export default function ReadingMaterialView({ material, pdfBase64 }: ReadingMaterialViewProps) {
++  const [downloadError, setDownloadError] = useState("");
++
+   const displayHtml = material.content_html
+     .replace(/```(?:html|HTML)?\s*/gi, "")
+     .replace(/<span\s+data-ref="[^"]*"\s*><\/span>/gi, "")
+@@ -51,6 +55,54 @@ export default function ReadingMaterialView({ material, pdfBase64 }: ReadingMate
+     window.open(url, "_blank");
+   };
+ 
++  const extractStoragePath = (url: string): string | null => {
++    try {
++      const parsed = new URL(url);
++      const marker = "/storage/v1/object/public/reading-materials-pdf/";
++      const markerIndex = parsed.pathname.indexOf(marker);
++      if (markerIndex === -1) return null;
++      return decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
++    } catch {
++      return null;
++    }
++  };
++
++  const downloadFromStorageApi = async () => {
++    if (!material.pdf_url) return;
++    setDownloadError("");
++
++    const path = extractStoragePath(material.pdf_url);
++    if (!path) {
++      setDownloadError("No se pudo resolver la ruta del PDF para descarga alternativa.");
++      return;
++    }
++
++    const { data, error } = await supabase.storage.from("reading-materials-pdf").download(path);
++    if (error || !data) {
++      setDownloadError(error?.message || "No se pudo descargar el PDF desde la API.");
++      return;
++    }
++
++    const url = URL.createObjectURL(data);
++    const link = document.createElement("a");
++    link.href = url;
++    link.download = "material-lectura.pdf";
++    document.body.appendChild(link);
++    link.click();
++    document.body.removeChild(link);
++    URL.revokeObjectURL(url);
++  };
++
++  const copyPdfLink = async () => {
++    if (!material.pdf_url) return;
++    setDownloadError("");
++    try {
++      await navigator.clipboard.writeText(material.pdf_url);
++    } catch {
++      setDownloadError("No se pudo copiar el enlace al portapapeles.");
++    }
++  };
++
+   return (
+     <div className="space-y-4">
+       <div className="flex items-center justify-between">
+@@ -88,13 +140,32 @@ export default function ReadingMaterialView({ material, pdfBase64 }: ReadingMate
+       </Card>
+ 
+       {material.pdf_url && (
+-        <div className="flex items-center gap-3">
+-          <Button variant="outline" size="sm" className="text-xs" asChild>
+-            <a href={material.pdf_url} target="_blank" rel="noopener noreferrer" download>
++        <div className="space-y-2">
++          <p className="text-xs text-muted-foreground">
++            Si tu navegador bloquea el dominio de Supabase (ERR_BLOCKED_BY_CLIENT), usa la descarga alternativa.
++          </p>
++          <div className="flex flex-wrap items-center gap-3">
++            <Button variant="outline" size="sm" className="text-xs" asChild>
++              <a href={material.pdf_url} target="_blank" rel="noopener noreferrer" download>
++                <Download className="mr-1 h-3 w-3" />
++                Descargar PDF
++              </a>
++            </Button>
++            <Button variant="outline" size="sm" className="text-xs" onClick={downloadFromStorageApi}>
+               <Download className="mr-1 h-3 w-3" />
+-              Descargar PDF
+-            </a>
+-          </Button>
++              Descarga alternativa
++            </Button>
++            <Button variant="outline" size="sm" className="text-xs" onClick={copyPdfLink}>
++              <Copy className="mr-1 h-3 w-3" />
++              Copiar enlace
++            </Button>
++          </div>
++          {downloadError && (
++            <Alert variant="destructive">
++              <AlertTriangle className="h-4 w-4" />
++              <AlertDescription className="text-xs">{downloadError}</AlertDescription>
++            </Alert>
++          )}
+         </div>
+       )}
+ 
+
+
